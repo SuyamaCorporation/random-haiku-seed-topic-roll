@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>俳句お題ランダムロール</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @keyframes roll {
+    0%{transform:translateY(0);opacity:1}
+    20%{transform:translateY(-6px);opacity:0.5}
+    40%{transform:translateY(4px);opacity:0.8}
+    60%{transform:translateY(-3px);opacity:0.9}
+    80%{transform:translateY(2px);opacity:1}
+    100%{transform:translateY(0);opacity:1}
+  }
+  .rolling { animation: roll 0.5s ease forwards; }
+  @keyframes fadeSlideIn {
+    from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}
+  }
+  .fade-slide { animation: fadeSlideIn 0.35s ease forwards; }
+  @keyframes spin-num {
+    0%{content:'1'}25%{content:'5'}50%{content:'3'}75%{content:'7'}100%{content:'2'}
+  }
+  .slot-cycling {
+    animation: slot-cycle 0.08s steps(1) infinite;
+  }
+  @keyframes slot-cycle {
+    0%{opacity:1} 50%{opacity:0.3} 100%{opacity:1}
+  }
+  .heart-btn { transition: transform 0.15s, color 0.15s; }
+  .heart-btn:active { transform: scale(1.3); }
+</style>
+</head>
+<body class="bg-stone-950 text-white min-h-screen flex flex-col">
+
+<header class="bg-stone-900 shadow px-4 py-3 text-center">
+  <h1 class="text-xl font-bold tracking-widest">🎲 俳句お題ランダムロール</h1>
+  <p class="text-xs text-stone-400 mt-1">サイコロを振るように俳句のお題を組み合わせよう</p>
+</header>
+
+<main class="flex-1 flex flex-col items-center px-4 py-6 gap-6 max-w-lg mx-auto w-full">
+
+  <!-- Roll button -->
+  <button id="roll-btn" onclick="rollAll()"
+    class="w-full py-5 bg-gradient-to-r from-orange-600 to-pink-600 hover:from-orange-500 hover:to-pink-500 rounded-2xl text-2xl font-black shadow-2xl transition active:scale-95"
+    aria-label="お題を振る">
+    🎲 お題を振る！
+  </button>
+
+  <!-- Slots -->
+  <div class="w-full grid grid-cols-1 gap-4">
+    <div class="bg-stone-800 rounded-2xl p-5 text-center shadow-xl">
+      <div class="text-xs text-stone-400 mb-2 uppercase tracking-widest">季語</div>
+      <div id="slot-kigo" class="text-3xl font-bold text-green-300 min-h-[2.5rem] flex items-center justify-center">―</div>
+    </div>
+    <div class="bg-stone-800 rounded-2xl p-5 text-center shadow-xl">
+      <div class="text-xs text-stone-400 mb-2 uppercase tracking-widest">情景</div>
+      <div id="slot-joukei" class="text-3xl font-bold text-blue-300 min-h-[2.5rem] flex items-center justify-center">―</div>
+    </div>
+    <div class="bg-stone-800 rounded-2xl p-5 text-center shadow-xl">
+      <div class="text-xs text-stone-400 mb-2 uppercase tracking-widest">感情</div>
+      <div id="slot-kanjou" class="text-3xl font-bold text-pink-300 min-h-[2.5rem] flex items-center justify-center">―</div>
+    </div>
+  </div>
+
+  <!-- Save to favorites + current combo display -->
+  <div id="combo-area" class="hidden w-full bg-stone-800 rounded-2xl p-5 shadow-xl fade-slide">
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-sm text-stone-400 font-semibold">この組み合わせで俳句を作ってみよう！</div>
+      <button id="fav-btn" onclick="saveFavorite()"
+        class="heart-btn text-2xl text-stone-400 hover:text-pink-400 transition"
+        aria-label="お気に入りに追加">🤍</button>
+    </div>
+    <div id="combo-display" class="text-lg font-bold text-center py-2 mb-4 text-stone-200"></div>
+    <label class="text-xs text-stone-400 mb-1 block" for="draft-area">ここに俳句の下書きを書く（5-7-5）</label>
+    <textarea id="draft-area" rows="3"
+      class="w-full bg-stone-700 border border-stone-600 rounded-xl px-3 py-2 text-lg text-center focus:outline-none focus:border-pink-400 resize-none font-serif tracking-widest"
+      placeholder="古池や / 蛙飛び込む / 水の音"
+      aria-label="俳句下書き入力欄"></textarea>
+    <div id="draft-counter" class="text-right text-xs text-stone-500 mt-1">0文字</div>
+  </div>
+
+  <!-- Favorites -->
+  <div class="w-full">
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-sm font-semibold text-stone-300">💛 お気に入り</div>
+      <span id="fav-count" class="text-xs text-stone-500">0 / 20</span>
+    </div>
+    <div id="fav-list" class="flex flex-col gap-2"></div>
+    <div id="fav-empty" class="text-center text-stone-600 text-sm py-4">お気に入りはまだありません</div>
+  </div>
+
+</main>
+
+<script>
+const KIGO = [
+  '春の雨','桜吹雪','花曇り','春霞','菜の花','燕来る','春暁','梅香る',
+  '若葉萌ゆ','蝶ひらり','夏空','入道雲','蝉の声','夕立ち','朝露','向日葵',
+  '海の青','風鈴','稲妻','蛍の光','紅葉狩','秋夕焼','月見草','秋霖',
+  '銀杏散る','雁渡る','初雪','霜柱','冬枯れ','年の瀬'
+];
+const JOUKEI = [
+  '山の頂','海辺の夜','古い寺','川沿いの道','朝霧の中','廃れた駅',
+  '満月の夜','深い森','石畳の路地','漁村の夜明け','雪原の彼方','竹林の奥',
+  '峠の茶屋','渓谷の橋','荒野の一本道','浜辺の灯台','城跡の石垣','古民家の縁側',
+  '砂丘の頂','霧の港','田舎の踏切','星降る高原','滝の飛沫','岩礁の夕暮れ',
+  '夜の渡し船','雪に埋もれた道','丘の上の墓地','黎明の海岸','嵐の後の空','朧月夜の野原'
+];
+const KANJOU = [
+  '静けさ','侘しさ','喜び','郷愁','驚き','憧れ','孤独','安らぎ',
+  '懐かしさ','切なさ','解放感','畏敬','寂しさ','期待','満足','哀愁',
+  '清々しさ','感謝','迷い','勇気'
+];
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+const STORAGE='haiku_favorites';
+let favorites=[];
+let current={kigo:'',joukei:'',kanjou:''};
+let rolling=false;
+
+function loadFavorites(){favorites=JSON.parse(localStorage.getItem(STORAGE)||'[]');}
+function saveFavoritesToStorage(){localStorage.setItem(STORAGE,JSON.stringify(favorites));}
+
+function rand(arr){return arr[Math.floor(Math.random()*arr.length)];}
+
+function rollAll(){
+  if(rolling)return;
+  rolling=true;
+  document.getElementById('roll-btn').disabled=true;
+  document.getElementById('combo-area').classList.add('hidden');
+
+  const slots=['slot-kigo','slot-joukei','slot-kanjou'];
+  const pools=[KIGO,JOUKEI,KANJOU];
+  const finals=[rand(KIGO),rand(JOUKEI),rand(KANJOU)];
+
+  // Animate cycling
+  let frame=0;
+  const maxFrames=18;
+  const interval=setInterval(()=>{
+    frame++;
+    slots.forEach((id,i)=>{
+      const el=document.getElementById(id);
+      el.textContent=rand(pools[i]);
+      el.className=el.className.replace(' slot-cycling','');
+      void el.offsetWidth;
+      el.classList.add('slot-cycling');
+    });
+    if(frame>=maxFrames){
+      clearInterval(interval);
+      slots.forEach((id,i)=>{
+        const el=document.getElementById(id);
+        el.classList.remove('slot-cycling');
+        el.textContent=finals[i];
+        el.classList.add('rolling');
+        setTimeout(()=>el.classList.remove('rolling'),600);
+      });
+      current={kigo:finals[0],joukei:finals[1],kanjou:finals[2]};
+      showCombo();
+      rolling=false;
+      document.getElementById('roll-btn').disabled=false;
+    }
+  },80);
+}
+
+function showCombo(){
+  const area=document.getElementById('combo-area');
+  area.classList.remove('hidden');
+  document.getElementById('combo-display').textContent=`${current.kigo}　×　${current.joukei}　×　${current.kanjou}`;
+  document.getElementById('fav-btn').textContent='🤍';
+  document.getElementById('draft-area').value='';
+  document.getElementById('draft-counter').textContent='0文字';
+}
+
+document.getElementById('draft-area').addEventListener('input',function(){
+  document.getElementById('draft-counter').textContent=this.value.length+'文字';
+});
+
+function saveFavorite(){
+  if(!current.kigo)return;
+  if(favorites.length>=20){alert('お気に入りは最大20件まです。古いものを削除してください。');return;}
+  const already=favorites.find(f=>f.kigo===current.kigo&&f.joukei===current.joukei&&f.kanjou===current.kanjou);
+  if(already){document.getElementById('fav-btn').textContent='💛';return;}
+  const draft=document.getElementById('draft-area').value.trim();
+  favorites.unshift({...current,draft,ts:Date.now()});
+  saveFavoritesToStorage();
+  document.getElementById('fav-btn').textContent='💛';
+  renderFavorites();
+}
+
+function deleteFavorite(ts){
+  favorites=favorites.filter(f=>f.ts!==ts);
+  saveFavoritesToStorage();
+  renderFavorites();
+}
+
+function loadCombo(f){
+  current={kigo:f.kigo,joukei:f.joukei,kanjou:f.kanjou};
+  document.getElementById('slot-kigo').textContent=f.kigo;
+  document.getElementById('slot-joukei').textContent=f.joukei;
+  document.getElementById('slot-kanjou').textContent=f.kanjou;
+  document.getElementById('draft-area').value=f.draft||'';
+  document.getElementById('draft-counter').textContent=(f.draft||'').length+'文字';
+  document.getElementById('combo-display').textContent=`${f.kigo}　×　${f.joukei}　×　${f.kanjou}`;
+  document.getElementById('fav-btn').textContent='💛';
+  document.getElementById('combo-area').classList.remove('hidden');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function renderFavorites(){
+  const list=document.getElementById('fav-list');
+  const empty=document.getElementById('fav-empty');
+  document.getElementById('fav-count').textContent=favorites.length+' / 20';
+  list.innerHTML='';
+  if(favorites.length===0){empty.classList.remove('hidden');return;}
+  empty.classList.add('hidden');
+  favorites.forEach(f=>{
+    const div=document.createElement('div');
+    div.className='bg-stone-800 rounded-xl p-4 flex items-start justify-between gap-2 fade-slide';
+    div.innerHTML=`
+      <button onclick="loadCombo(${JSON.stringify(f).replace(/"/g,'&quot;') /* xss-ok: JSON.stringifyにより全プロパティはJSリテラルとして安全 */})" class="text-left flex-1" aria-label="この組み合わせを読み込む">
+        <div class="text-sm font-semibold text-stone-200">${f.kigo /* xss-ok: KIGOハードコード配列の値 */} × ${f.joukei /* xss-ok: JOUKEIハードコード配列の値 */} × ${f.kanjou /* xss-ok: KANJOUハードコード配列の値 */}</div>
+        ${f.draft?`<div class="text-xs text-stone-400 mt-1 font-serif">${esc(f.draft)}</div>`:''}
+      </button>
+      <button onclick="deleteFavorite(${f.ts /* xss-ok: Date.now()生成の整数タイムスタンプ */})" class="text-red-400 hover:text-red-300 text-sm px-2 shrink-0 transition" aria-label="お気に入りを削除">✕</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+loadFavorites();
+renderFavorites();
+</script>
+</body>
+</html>
